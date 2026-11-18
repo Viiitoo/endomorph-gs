@@ -8,9 +8,11 @@ Reconstruct moving tissue with deformable 3D Gaussians and render a surgical sce
 
 [![Animation of 25 held-out StereoMIS views. Each frame compares the captured image, the Gaussian reconstruction, and the rendered depth on a fixed color scale.](docs/assets/stereomis-reconstruction.gif)](docs/assets/stereomis-reconstruction.mp4)
 
-**[Open the full-resolution video](docs/assets/stereomis-reconstruction.mp4)** · [Download MP4](https://raw.githubusercontent.com/Viiitoo/EH-SurGS-clean/main/docs/assets/stereomis-reconstruction.mp4) · [Metrics for this run](docs/assets/demo-results.json)
+**[Open the full-resolution video](docs/assets/stereomis-reconstruction.mp4)** · [Download MP4](https://raw.githubusercontent.com/Viiitoo/EH-SurGS-clean/main/docs/assets/stereomis-reconstruction.mp4) · [Per-frame RGB scores](docs/assets/demo-psnr-by-frame.csv)
 
 Read left to right to compare the captured folds and vessels with their reconstructed appearance and depth. The model saw 175 training views. The animation plays all 25 held-out views in order at four views per second. The depth colors span 60–180 mm across the entire clip.
+
+**Full-image PSNR for the reconstruction shown above is 23.17 dB.** Fine vessels and the instrument edge on the right blur together in the reconstruction. The instrument mask excludes much of this area, including nearby tissue. [Captured image, reconstruction, scoring mask and error map for frame 97](docs/assets/demo-psnr-frame097.png)
 
 ## Method
 
@@ -32,9 +34,22 @@ A separate experiment projects 3D contours from MASt3R pointmaps onto 2D tissue 
 
 ## Results
 
-All rows use the same 200-frame `stereo_seq_easy` sequence, 3,000 training iterations and 25 held-out views. For scoring, the evaluator applies the valid-depth and instrument mask to both images before computing the metrics.
+The demo uses 25 held-out RGB frames from the 200-frame `stereo_seq_easy` sequence. We compared each original 640 × 480 RGB PNG to the matching render using a peak value of 255, then averaged the 25 per-frame PSNR values in dB.
 
-| Camera poses | PSNR ↑ (dB) | SSIM ↑ | LPIPS ↓ |
+| Pixels used for the demo score | How the mean squared error is computed | PSNR ↑ (dB) |
+| --- | --- | ---: |
+| Full image, as displayed | All RGB samples | **23.17** |
+| Valid tissue region | Only RGB samples with positive depth outside the instrument mask | **33.59** |
+| Excluded region | Only RGB samples outside the valid region | 17.78 |
+| Original evaluator | Zero error outside the valid region, divide by the full-image sample count | 34.93 |
+
+The mask excludes 26.48% of pixels on average. Those pixels account for 91.78% of squared RGB error on average across views. As a check on how much the camera view changes between adjacent frames, copying the preceding training RGB frame directly yields 33.85 dB over the full image and 33.95 dB over valid pixels. This baseline uses no geometry. [Per-frame measurements](docs/assets/demo-psnr-by-frame.csv)
+
+### Comparison with earlier runs
+
+These experiments all used 3,000 training iterations. The original evaluator zeros excluded pixels in both images before computing each metric across the full frame. The values below follow that convention. [Evaluator output for the demo](docs/assets/demo-results.json)
+
+| Camera poses | Zero-masked PSNR ↑ (dB) | Zero-masked SSIM ↑ | Zero-masked LPIPS ↓ |
 | --- | ---: | ---: | ---: |
 | Reference poses · **demo run** | **34.9252** | **0.9072** | **0.1628** |
 | Reference poses · earlier run | 34.9203 | 0.9074 | 0.1624 |
@@ -122,4 +137,4 @@ This project builds on the ICRA 2025 work by Jiwei Shan, Zeyu Cai, Cheng-Tai Hsi
 }
 ```
 
-StereoMIS imagery is credited to Michel Hayoz and Max Allan. The comparison GIF and MP4 use resized StereoMIS frames alongside model predictions, with labels and a depth color map added. These two media files are shared under CC BY-NC-SA 4.0. The reconstruction code retains the upstream Gaussian-Splatting research license. [Dataset and citation](https://zenodo.org/records/7727692) · [Media license](https://creativecommons.org/licenses/by-nc-sa/4.0/) · [Code license](LICENSE.md)
+StereoMIS imagery is credited to Michel Hayoz and Max Allan. The comparison GIF, MP4 and frame 97 figure use StereoMIS frames alongside model predictions, with labels, color maps and a mask overlay. These media files are shared under CC BY-NC-SA 4.0. The reconstruction code retains the upstream Gaussian-Splatting research license. [Dataset and citation](https://zenodo.org/records/7727692) · [Media license](https://creativecommons.org/licenses/by-nc-sa/4.0/) · [Code license](LICENSE.md)
