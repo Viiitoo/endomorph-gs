@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.so
+*.o
+*.egg-info/
+build/
+dist/
+.venv/
+/data/
+/external/
+/output/
+/deformation_mask.npy

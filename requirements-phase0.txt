@@ -1,0 +1,15 @@
+# Install the CUDA-enabled PyTorch and torchvision wheels first (see README).
+numpy==1.26.0
+mmcv==1.6.0
+yapf==0.40.1
+opencv-python==4.11.0.86
+open3d==0.18.0
+matplotlib==3.10.8
+plyfile==1.0.3
+imageio==2.34.2
+imageio-ffmpeg==0.8.1
+lpips==0.1.4
+tqdm==4.65.0
+ninja
+wheel
+setuptools<81
