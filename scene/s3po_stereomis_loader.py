@@ -30,6 +30,8 @@ class S3POStereoMISDataset(object):
         self.depth_scale = float(depth_scale)
         self.pose_scale = float(pose_scale)
         self.mask_mode = str(mask_mode)
+        if self.mask_mode not in ("exclude_instrument", "instrument_only", "depth_only"):
+            raise ValueError(f"Unknown StereoMIS mask mode: {self.mask_mode}")
         self.max_init_points = int(max_init_points)
         self.pose_source = str(pose_source)
         self.pose_path = str(pose_path)
@@ -146,7 +148,7 @@ class S3POStereoMISDataset(object):
             depth_m = self._load_depth_m(idx)
         valid = depth_m > 0
         mask_path = self.mask_paths[idx]
-        if mask_path is not None:
+        if mask_path is not None and self.mask_mode != "depth_only":
             inst = np.array(Image.open(mask_path))
             if inst.ndim == 3:
                 inst = inst[..., 0]
@@ -230,6 +232,7 @@ def read_s3po_stereomis_scene(datadir, scene_info_cls, norm_fn, args=None):
     if args is not None:
         dataset_kwargs["pose_source"] = getattr(args, "pose_source", "gt")
         dataset_kwargs["pose_path"] = getattr(args, "pose_path", "")
+        dataset_kwargs["mask_mode"] = getattr(args, "mask_mode", "exclude_instrument")
     dataset = S3POStereoMISDataset(datadir=datadir, **dataset_kwargs)
     train_cam_infos = dataset.format_infos(split="train")
     test_cam_infos = dataset.format_infos(split="test")

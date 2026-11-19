@@ -162,6 +162,8 @@ if __name__ == "__main__":
     parser.add_argument("--reconstruct_video", action="store_true")
     parser.add_argument("--configs", type=str)
     args = get_combined_args(parser)
+    # Older checkpoints predate this option. Make it available to config overrides.
+    args.mask_mode = getattr(args, "mask_mode", model.mask_mode)
     print("Rendering ", args.model_path)
     if args.configs:
         import mmcv

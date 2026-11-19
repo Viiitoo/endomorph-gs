@@ -59,6 +59,7 @@ class ModelParams(ParamGroup):
         self.camera_extent = 10
         self.pose_source = "gt"
         self.pose_path = ""
+        self.mask_mode = "exclude_instrument"
         super().__init__(parser, "Loading Parameters", sentinel)
 
     def extract(self, args):

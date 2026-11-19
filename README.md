@@ -6,19 +6,17 @@ Reconstruct moving tissue with deformable 3D Gaussians and render a surgical sce
 
 ## Reconstruction
 
-[![Animation of 25 held-out StereoMIS views. Each frame compares the captured image, the Gaussian reconstruction, and the rendered depth on a fixed color scale.](docs/assets/stereomis-reconstruction.gif)](docs/assets/stereomis-reconstruction.mp4)
+[![Captured and reconstructed RGB in all 25 held-out StereoMIS frames, shown side by side.](docs/assets/full-rgb.webp)](docs/assets/full-rgb.mp4)
 
-**[Open the full-resolution video](docs/assets/stereomis-reconstruction.mp4)** · [Download MP4](https://raw.githubusercontent.com/Viiitoo/EH-SurGS-clean/main/docs/assets/stereomis-reconstruction.mp4) · [Per-frame RGB scores](docs/assets/demo-psnr-by-frame.csv)
+**[Play the native-resolution video with depth](docs/assets/full-rgb.mp4)** · [Compare the instrument and vessels at original pixel size](docs/assets/full-rgb-frame097.png) · [Evaluator output](docs/assets/full-rgb-results.json) · [Per-frame scores](docs/assets/run-comparison.csv)
 
-Read left to right to compare the captured folds and vessels with their reconstructed appearance and depth. The model saw 175 training views. The animation plays all 25 held-out views in order at four views per second. The depth colors span 60–180 mm across the entire clip.
-
-**Full-image PSNR for the reconstruction shown above is 23.17 dB.** Fine vessels and the instrument edge on the right blur together in the reconstruction. The instrument mask excludes much of this area, including nearby tissue. [Captured image, reconstruction, scoring mask and error map for frame 97](docs/assets/demo-psnr-frame097.png)
+The model trained on 175 views and rendered the remaining 25 at their reference poses. The instrument shaft and the vessels near its tip are visible in the new render. This run includes instrument pixels in RGB and depth supervision. Its **full-image PSNR is 34.29 dB** and **full-image LPIPS is 0.165**. The clip plays four held-out views per second. Its depth scale stays fixed at 60–180 mm.
 
 ## Method
 
 ```mermaid
 flowchart LR
-    A["RGB, depth and instrument masks"] --> C["Initialize Gaussians from valid first-frame depth"]
+    A["RGB, depth and optional instrument mask"] --> C["Initialize Gaussians from valid first-frame depth"]
     B["Reference or aligned COLMAP poses"] --> C
     C --> D["Optimize Gaussian appearance and time-dependent deformation"]
     A --> D
@@ -28,34 +26,31 @@ flowchart LR
     E --> F["RGB and depth"]
 ```
 
-The loader uses calibration to back-project up to 50,000 tissue pixels into 3D. Training fits appearance and deformation to the masked RGB and depth observations. The adaptive motion hierarchy compares local image errors with and without deformation to select which Gaussians can move. Swapping the pose input lets us measure how a different camera trajectory changes the rendered result.
+The loader uses calibration to back-project up to 50,000 valid first-frame pixels into 3D. Training fits appearance and deformation to RGB and depth observations. The full-scene preset keeps positive-depth pixels, including instruments. The tissue preset also excludes the instrument mask. The adaptive motion hierarchy compares local image errors with and without deformation to select which Gaussians can move. Swapping the pose input lets us measure how a different camera trajectory changes the rendered result.
 
 A separate experiment projects 3D contours from MASt3R pointmaps onto 2D tissue edges. On this sequence the projected contour distance could decrease while camera translation error increased. [Contour experiments](docs/phase0_issue_summary.md) · [Pointmap camera calibration](docs/mast3r_effective_camera.md)
 
 ## Results
 
-The demo uses 25 held-out RGB frames from the 200-frame `stereo_seq_easy` sequence. We compared each original 640 × 480 RGB PNG to the matching render using a peak value of 255, then averaged the 25 per-frame PSNR values in dB.
+All four runs used the same 175 training views and 25 held-out views from the 200-frame `stereo_seq_easy` sequence. We compared the original 640 × 480 render and capture for every held-out frame. The first three metrics cover every RGB pixel. The final column uses only positive-depth pixels outside the instrument mask. Each column averages the per-frame scores.
 
-| Pixels used for the demo score | How the mean squared error is computed | PSNR ↑ (dB) |
-| --- | --- | ---: |
-| Full image, as displayed | All RGB samples | **23.17** |
-| Valid tissue region | Only RGB samples with positive depth outside the instrument mask | **33.59** |
-| Excluded region | Only RGB samples outside the valid region | 17.78 |
-| Original evaluator | Zero error outside the valid region, divide by the full-image sample count | 34.93 |
+| Pose, training region and iteration count | Full PSNR ↑ (dB) | Full SSIM ↑ | Full LPIPS ↓ | Tissue PSNR ↑ (dB) |
+| --- | ---: | ---: | ---: | ---: |
+| Reference poses · full scene · 8,000 steps **(demo)** | 34.29 | 0.8861 | 0.1646 | 34.70 |
+| Reference poses · full scene · 3,000 steps | 33.01 | 0.8680 | 0.2590 | 33.62 |
+| Reference poses · instrument mask · 3,000 steps (previous demo) | 23.17 | 0.8076 | 0.3970 | 33.59 |
+| Aligned COLMAP · instrument mask · 3,000 steps | 19.56 | 0.7787 | 0.3661 | 34.20 |
 
-The mask excludes 26.48% of pixels on average. Those pixels account for 91.78% of squared RGB error on average across views. As a check on how much the camera view changes between adjacent frames, copying the preceding training RGB frame directly yields 33.85 dB over the full image and 33.95 dB over valid pixels. This baseline uses no geometry. [Per-frame measurements](docs/assets/demo-psnr-by-frame.csv)
+The 8,000-step run also grows more Gaussians during the first 3,000 iterations. We used the held-out comparisons to select the homepage example. On this closely spaced sequence, directly copying the preceding training image gives 33.85 dB, SSIM 0.8977 and LPIPS 0.0674. That comparison uses a neighboring observation and requires no 3D reconstruction. [Run comparison by frame](docs/assets/run-comparison.csv)
 
-### Comparison with earlier runs
+<details>
+<summary><strong>Why the earlier tissue-only demo reported 34.93 dB</strong></summary>
 
-These experiments all used 3,000 training iterations. The original evaluator zeros excluded pixels in both images before computing each metric across the full frame. The values below follow that convention. [Evaluator output for the demo](docs/assets/demo-results.json)
+The original evaluator zeroed excluded pixels in both images and divided by the full image size. On the previous demo this gave 34.93 dB. Evaluating only the valid tissue gave 33.59 dB, and evaluating all displayed pixels gave 23.17 dB. The instrument mask excluded 26.48% of each frame on average, including nearby tissue. [Previous demo audit](docs/assets/demo-psnr-by-frame.csv) · [Previous error map](docs/assets/demo-psnr-frame097.png)
 
-| Camera poses | Zero-masked PSNR ↑ (dB) | Zero-masked SSIM ↑ | Zero-masked LPIPS ↓ |
-| --- | ---: | ---: | ---: |
-| Reference poses · **demo run** | **34.9252** | **0.9072** | **0.1628** |
-| Reference poses · earlier run | 34.9203 | 0.9074 | 0.1624 |
-| COLMAP aligned to the reference trajectory · earlier run | 35.4949 | 0.9161 | 0.1378 |
+The aligned COLMAP experiment registered 78 of the 200 frames, aligned poses to the reference trajectory by a similarity transform, and assigned each unregistered frame the nearest registered pose in time. [Earlier experiment log](docs/experiment_metrics.md)
 
-COLMAP registered 78 of the 200 frames. A similarity transform aligned those poses to ground truth, and each remaining frame inherited the nearest registered pose in time. The last row measures rendering quality under that controlled setup. [Experiment log and mask comparison](docs/experiment_metrics.md)
+</details>
 
 ## Run locally
 
@@ -79,21 +74,21 @@ train/
 ├── depth/              one depth PNG per frame, in millimetres
 ├── gt/                 one camera-to-world matrix per frame, as text
 ├── calib/              text calibration with fx, fy, cx and cy
-└── instrument_mask/    nonzero pixels mark instruments (used for the demo)
+└── instrument_mask/    nonzero pixels mark instruments for tissue-only scoring
 ```
 
 Run these commands from the checkout. Complete rendering before training another model there, as the renderer reads the most recent training run’s `deformation_mask.npy` from the working directory.
 
 ```bash
 SEQ=/path/to/stereo_seq_easy/train
-CFG=arguments/s3po/stereo_seq_easy.py
-MODEL=output/stereo-gt
-python train.py -s "$SEQ" -m "$MODEL" --configs "$CFG"
+CFG=arguments/stereo_seq_easy_full_rgb.py
+MODEL=output/stereo-full-rgb
+python train.py -s "$SEQ" -m "$MODEL" --configs "$CFG" --save_iterations 8000
 python render.py -m "$MODEL" --configs "$CFG" --skip_train --skip_video
 python metrics.py -m "$MODEL" -p test
 ```
 
-Compare the PNGs under `$MODEL/test/ours_3000/{gt,renders,depth}`. The evaluator writes `$MODEL/results.json` and `$MODEL/per_view.json`. Its first run downloads the AlexNet weights for LPIPS.
+Compare the PNGs under `$MODEL/test/ours_8000/{gt,renders,depth}`. The evaluator writes `$MODEL/results.json` and `$MODEL/per_view.json`. All 25 test frames have positive depth throughout, so this preset gives full-image scores for the demo. The first evaluation downloads the AlexNet weights for LPIPS. The earlier tissue-only training configuration is [available here](arguments/s3po/stereo_seq_easy.py).
 
 <details>
 <summary><strong>Reproduce the aligned COLMAP experiment</strong></summary>
@@ -137,4 +132,4 @@ This project builds on the ICRA 2025 work by Jiwei Shan, Zeyu Cai, Cheng-Tai Hsi
 }
 ```
 
-StereoMIS imagery is credited to Michel Hayoz and Max Allan. The comparison GIF, MP4 and frame 97 figure use StereoMIS frames alongside model predictions, with labels, color maps and a mask overlay. These media files are shared under CC BY-NC-SA 4.0. The reconstruction code retains the upstream Gaussian-Splatting research license. [Dataset and citation](https://zenodo.org/records/7727692) · [Media license](https://creativecommons.org/licenses/by-nc-sa/4.0/) · [Code license](LICENSE.md)
+StereoMIS imagery is credited to Michel Hayoz and Max Allan. The animations, videos and comparison figures use StereoMIS frames alongside model predictions, with labels, color maps, crops and mask overlays. These media files are shared under CC BY-NC-SA 4.0. The reconstruction code retains the upstream Gaussian-Splatting research license. [Dataset and citation](https://zenodo.org/records/7727692) · [Media license](https://creativecommons.org/licenses/by-nc-sa/4.0/) · [Code license](LICENSE.md)
